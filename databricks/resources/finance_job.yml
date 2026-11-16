@@ -3,23 +3,29 @@ resources:
     finance_etl:
       name: finance-etl-${bundle.target}
       tasks:
-        - task_key: finance_task
-          python_wheel_task:
-            package_name: finance_etl
-            entry_point: finance-etl
-            parameters:
-              - --catalog
-              - ${var.catalog}
-              - --schema
-              - ${var.schema}
-          libraries:
-            - whl: ../dist/*.whl
-          new_cluster:
-            spark_version: "15.4.x-scala2.12"
-            node_type_id: "Standard_DS3_v2"
-            num_workers: 1
-            data_security_mode: SINGLE_USER   # Unity Catalog access from the job cluster
-
+      - task_key: finance_task
+        python_wheel_task:
+          package_name: finance_etl
+          entry_point: finance-etl
+          parameters:
+          - --catalog
+          - ${var.catalog}
+          - --schema
+          - ${var.schema}
+        libraries:
+        - whl: ../dist/*.whl
+        new_cluster:
+          spark_version: "15.4.x-scala2.12"
+          node_type_id: "Standard_DS3_v2"
+          # Single node (driver only): 4 vCPUs in total. Fits the default 4-vCPU DSv2 quota of a new
+          # subscription. For real workloads, set num_workers >= 1 and remove the three single-node lines.
+          num_workers: 0
+          data_security_mode: SINGLE_USER # Unity Catalog access from the job cluster
+          spark_conf:
+            spark.databricks.cluster.profile: singleNode
+            spark.master: "local[*]"
+          custom_tags:
+            ResourceClass: SingleNode
       # Optional: let the Airflow service principal trigger this job (and nothing else).
       # Replace the application ID, then uncomment. Verify the permission name against your CLI version.
       # permissions:
