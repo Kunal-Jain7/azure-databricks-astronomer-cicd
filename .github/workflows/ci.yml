@@ -1,0 +1,195 @@
+name: PR CI
+
+# Unprivileged pull request checks for both domains: no cloud access, no deploy.
+#   detect-changes -> secret-scan (parallel) -> databricks-ci / astronomer-ci -> CI Gate
+#
+# Make "CI Gate" the required status check on DEV, UAT and PROD. This workflow has no path filter on
+# purpose: a path-filtered workflow never reports a status on PRs that touch none of its paths, which
+# would leave a required check waiting forever. Change detection happens inside the workflow instead.
+#
+# Repository variables (all optional):
+#   RUNNER_LABEL   runner label, e.g. the client's ARC runner set        (default: ubuntu-latest)
+#   PYTHON_IMAGE   container image for the Python jobs, e.g. the internal Artifactory mirror of
+#                  python:3.x-bookworm (use 3.10 to 3.12)                (default: python:3.11-bookworm)
+#
+# Client runners: add the company root CA step as the first step of every job
+#   - uses: Sanofi-InnerSource/github-actions-library/setup-root-ca@main
+
+on:
+  pull_request:
+    branches: [DEV, UAT, PROD]
+    types: [opened, reopened, synchronize, ready_for_review]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+env:
+  # Keep in step with the Astro Runtime in orchestration/Dockerfile.
+  AIRFLOW_VERSION: "2.10.4"
+
+jobs:
+  detect-changes:
+    name: Detect changed areas
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    outputs:
+      databricks: ${{ steps.changes.outputs.databricks }}
+      orchestration: ${{ steps.changes.outputs.orchestration }}
+      keyvault: ${{ steps.changes.outputs.keyvault }}
+      has_changes: ${{ steps.changes.outputs.has_changes }}
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Detect changes
+        id: changes
+        env:
+          THREE_DOT: "true"
+          CI_CHANGES_TRIGGER_ALL: "true"
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: bash scripts/detect_changes.sh "$BASE_SHA" "$HEAD_SHA"
+
+  secret-scan:
+    name: Secret scan
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    container:
+      image: ${{ vars.PYTHON_IMAGE || 'python:3.11-bookworm' }}
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl -sSfL -o "$RUNNER_TEMP/gitleaks.tgz" \
+            "https://github.com/gitleaks/gitleaks/releases/download/v8.18.4/gitleaks_8.18.4_linux_x64.tar.gz"
+          tar -xzf "$RUNNER_TEMP/gitleaks.tgz" -C "$RUNNER_TEMP" gitleaks
+
+      - name: Run gitleaks
+        run: |
+          set -euo pipefail
+          # --redact keeps any finding out of the build log.
+          "$RUNNER_TEMP/gitleaks" detect --source . --redact --verbose --log-opts="HEAD"
+
+  databricks-ci:
+    name: Databricks checks
+    needs: detect-changes
+    if: needs.detect-changes.outputs.databricks == 'true' || needs.detect-changes.outputs.keyvault == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    container:
+      image: ${{ vars.PYTHON_IMAGE || 'python:3.11-bookworm' }}
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Install build and test tools
+        run: python -m pip install -q build pytest PyYAML
+
+      - name: Compile and test
+        run: |
+          set -euo pipefail
+          python -m compileall -q databricks/src
+          python -m pytest databricks/tests -q
+
+      - name: Build wheel
+        working-directory: databricks
+        run: python -m build --wheel
+
+      - name: Validate YAML syntax
+        run: |
+          python - <<'PYCODE'
+          from pathlib import Path
+          import yaml
+          for folder in (Path('databricks'), Path('keyvault'), Path('.github/workflows')):
+              for file in list(folder.rglob('*.yml')) + list(folder.rglob('*.yaml')):
+                  with file.open(encoding='utf-8') as f:
+                      yaml.safe_load(f)
+                  print(f'OK: {file}')
+          PYCODE
+      # No cloud credentials here. Authenticated `databricks bundle validate` runs in the deploy workflow.
+
+  astronomer-ci:
+    name: Astronomer checks
+    needs: detect-changes
+    if: needs.detect-changes.outputs.orchestration == 'true'
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    container:
+      image: ${{ vars.PYTHON_IMAGE || 'python:3.11-bookworm' }}
+    steps:
+      - name: Checkout pull request source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Python syntax check
+        run: python -m compileall -q orchestration/dags
+
+      - name: DAG integrity tests (separate venv, Airflow pinned)
+        run: |
+          set -euo pipefail
+          PYV="$(python -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')"
+          python -m venv "$RUNNER_TEMP/airflow-venv"
+          . "$RUNNER_TEMP/airflow-venv/bin/activate"
+          pip install -q "apache-airflow==${AIRFLOW_VERSION}" apache-airflow-providers-databricks pytest \
+            --constraint "https://raw.githubusercontent.com/apache/airflow/constraints-${AIRFLOW_VERSION}/constraints-${PYV}.txt"
+          pytest orchestration/tests -q
+
+  ci-gate:
+    name: CI Gate
+    if: always()
+    needs: [detect-changes, secret-scan, databricks-ci, astronomer-ci]
+    runs-on: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    steps:
+      - name: Evaluate results
+        env:
+          DETECT: ${{ needs.detect-changes.result }}
+          SECRETS: ${{ needs.secret-scan.result }}
+          DBX: ${{ needs.databricks-ci.result }}
+          ASTRO: ${{ needs.astronomer-ci.result }}
+          DBX_EXPECTED: ${{ needs.detect-changes.outputs.databricks == 'true' || needs.detect-changes.outputs.keyvault == 'true' }}
+          ASTRO_EXPECTED: ${{ needs.detect-changes.outputs.orchestration == 'true' }}
+        run: |
+          set -euo pipefail
+          echo "detect-changes: $DETECT"
+          echo "secret-scan:    $SECRETS"
+          echo "databricks-ci:  $DBX (expected to run: $DBX_EXPECTED)"
+          echo "astronomer-ci:  $ASTRO (expected to run: $ASTRO_EXPECTED)"
+
+          FAIL=0
+          [ "$DETECT" = "success" ]  || { echo "Change detection did not succeed."; FAIL=1; }
+          [ "$SECRETS" = "success" ] || { echo "Secret scan did not succeed.";      FAIL=1; }
+
+          if [ "$DBX_EXPECTED" = "true" ]; then
+            [ "$DBX" = "success" ] || { echo "Databricks checks did not succeed."; FAIL=1; }
+          else
+            [ "$DBX" = "skipped" ] || { echo "Databricks checks ran unexpectedly: $DBX"; FAIL=1; }
+          fi
+
+          if [ "$ASTRO_EXPECTED" = "true" ]; then
+            [ "$ASTRO" = "success" ] || { echo "Astronomer checks did not succeed."; FAIL=1; }
+          else
+            [ "$ASTRO" = "skipped" ] || { echo "Astronomer checks ran unexpectedly: $ASTRO"; FAIL=1; }
+          fi
+
+          if [ "$FAIL" -ne 0 ]; then
+            exit 1
+          fi
+          echo "All applicable checks passed."

@@ -1,0 +1,28 @@
+name: Azure Key Vault - Manual Sync
+
+# Manual sync for rotating GitHub secrets/settings without a commit, and for the first sync of a new
+# environment. Run it from the DEV, UAT or PROD branch and type SYNC.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Enter SYNC to update the allowlisted Key Vault values'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    # Only from a protected long-lived environment branch.
+    if: ${{ inputs.confirm == 'SYNC' && (github.ref_name == 'DEV' || github.ref_name == 'UAT' || github.ref_name == 'PROD') }}
+    permissions:
+      contents: read
+      id-token: write
+    uses: ./.github/workflows/keyvault-sync.yml
+    with:
+      target: ${{ github.ref_name == 'DEV' && 'dev' || github.ref_name == 'UAT' && 'uat' || 'prod' }}
+      runner: ${{ vars.RUNNER_LABEL || 'ubuntu-latest' }}
+    secrets: inherit

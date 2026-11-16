@@ -1,0 +1,5 @@
+# Change the revision in an approved PR when GitHub configuration/secrets
+# should be synchronized as part of the subsequent branch deployment.
+# The revision is a sync trigger, NOT an actual secret version detector.
+revision: 1
+reason: "Initial synchronization"

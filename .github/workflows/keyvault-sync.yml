@@ -1,0 +1,52 @@
+name: Azure Key Vault - Sync (reusable)
+
+# Synchronizes the allowlist in scripts/sync_keyvault.sh to the Key Vault of one environment.
+# Called by databricks-deploy.yml, astronomer-deploy.yml and sync-keyvault-manual.yml.
+#
+# Client runners: add the company root CA step as the FIRST step of the job
+#   - uses: Sanofi-InnerSource/github-actions-library/setup-root-ca@main
+# This job also needs the Azure CLI (az) on the runner.
+
+on:
+  workflow_call:
+    inputs:
+      target:
+        description: "dev | uat | prod (GitHub environment name)"
+        type: string
+        required: true
+      runner:
+        description: "Runner label (callers pass the repository variable RUNNER_LABEL)"
+        type: string
+        required: false
+        default: ubuntu-latest
+
+permissions:
+  contents: read
+
+jobs:
+  sync:
+    name: Synchronize allowlisted Key Vault values (${{ inputs.target }})
+    runs-on: ${{ inputs.runner }}
+    environment: ${{ inputs.target }}
+    permissions:
+      contents: read
+      id-token: write
+    # One sync at a time per environment, even when two deploy workflows run together.
+    concurrency:
+      group: keyvault-${{ inputs.target }}
+      cancel-in-progress: false
+    env:
+      AZURE_CORE_OUTPUT: none
+      KEYVAULT_NAME: ${{ vars.AZURE_KEYVAULT_NAME }}
+      FINANCE_API_KEY: ${{ secrets.FINANCE_API_KEY }}
+      FINANCE_ENDPOINT: ${{ vars.FINANCE_ENDPOINT }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Azure login (OIDC, no client secret)
+        uses: azure/login@v3
+        with:
+          client-id: ${{ vars.AZURE_CLIENT_ID }}
+          tenant-id: ${{ vars.AZURE_TENANT_ID }}
+          subscription-id: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+      - name: Synchronize allowlisted secrets and configuration
+        run: bash scripts/sync_keyvault.sh

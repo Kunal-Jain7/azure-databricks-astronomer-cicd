@@ -1,0 +1,31 @@
+bundle:
+  name: finance-etl
+
+include:
+  - resources/*.yml
+
+artifacts:
+  finance:
+    type: whl
+    path: .
+    build: python -m build --wheel
+
+variables:
+  catalog:
+    description: Destination Unity Catalog catalog
+  schema:
+    description: Destination schema
+
+targets:
+  dev:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundles/${bundle.name}/${bundle.target}
+  uat:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundles/${bundle.name}/${bundle.target}
+  prod:
+    mode: production
+    workspace:
+      root_path: /Workspace/Shared/.bundles/${bundle.name}/${bundle.target}

@@ -1,0 +1,6 @@
+# Replace with your real team. Combine with branch protection ("Require review from Code Owners")
+# so nobody can widen the Key Vault allowlist or change deploy logic without platform review.
+
+/keyvault/                    @YOUR-ORG/platform-team
+/scripts/sync_keyvault.sh     @YOUR-ORG/platform-team
+/.github/                     @YOUR-ORG/platform-team
