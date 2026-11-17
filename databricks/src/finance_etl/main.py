@@ -13,7 +13,8 @@ def main():
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.getOrCreate()
     print(f"Finance job started in {args.catalog}.{args.schema}")
-    print(f"Spark app: {spark.sparkContext.appName}")
+    # spark.sparkContext is not available on serverless compute, so use spark.version.
+    print(f"Spark version: {spark.version}")
     # Replace with actual transformations. No secrets printed here.
 
 
