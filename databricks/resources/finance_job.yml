@@ -31,5 +31,5 @@ resources:
       # Optional: let the Airflow service principal trigger this job (and nothing else).
       # Replace the application ID, then uncomment. Verify the permission name against your CLI version.
       permissions:
-      - service_principal_name: "e14c6a2a-c60b-4459-8bcc-91aae67cd439"
+      - service_principal_name: "bd751a51-4590-43ee-abd9-53a82b711927"
         level: CAN_MANAGE_RUN
