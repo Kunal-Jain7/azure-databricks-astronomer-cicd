@@ -13,7 +13,6 @@ resources:
           - ${var.catalog}
           - --schema
           - ${var.schema}
-
       # Serverless compute. This workspace only allows serverless (a "Serverless"-type workspace).
       # If "environment_version" is rejected by your CLI/workspace, use `client: "1"` instead.
       environments:
@@ -31,6 +30,6 @@ resources:
 
       # Optional: let the Airflow service principal trigger this job (and nothing else).
       # Replace the application ID, then uncomment. Verify the permission name against your CLI version.
-      # permissions:
-      #   - service_principal_name: "<AIRFLOW-SP-APPLICATION-ID>"
-      #     level: CAN_MANAGE_RUN
+      permissions:
+      - service_principal_name: "e14c6a2a-c60b-4459-8bcc-91aae67cd439"
+        level: CAN_MANAGE_RUN
