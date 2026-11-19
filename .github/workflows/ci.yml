@@ -10,7 +10,7 @@ name: PR CI
 # Repository variables (all optional):
 #   RUNNER_LABEL   runner label, e.g. the client's ARC runner set        (default: ubuntu-latest)
 #   PYTHON_IMAGE   container image for the Python jobs, e.g. the internal Artifactory mirror of
-#                  python:3.x-bookworm (use 3.10 to 3.12)                (default: python:3.11-bookworm)
+#                  python:3.x-bookworm (tested with 3.11)                (default: python:3.11-bookworm)
 #
 # Client runners: add the company root CA step as the first step of every job
 #   - uses: Sanofi-InnerSource/github-actions-library/setup-root-ca@main
@@ -29,7 +29,7 @@ concurrency:
 
 env:
   # Keep in step with the Astro Runtime in orchestration/Dockerfile.
-  AIRFLOW_VERSION: "2.10.4"
+  AIRFLOW_VERSION: "3.4.0"
 
 jobs:
   detect-changes:
