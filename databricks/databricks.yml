@@ -2,7 +2,7 @@ bundle:
   name: finance-etl
 
 include:
-  - resources/*.yml
+- resources/*.yml
 
 artifacts:
   finance:
@@ -15,6 +15,8 @@ variables:
     description: Destination Unity Catalog catalog
   schema:
     description: Destination schema
+  airflow_sp_application_id:
+    description: Application ID of the Databricks service principal that Airflow uses to run the job
 
 targets:
   dev:
