@@ -23,6 +23,11 @@ on:
 permissions:
   contents: read
 
+# Jobs that run in a container use plain sh by default, which has no `set -o pipefail`.
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ci-${{ github.event.pull_request.number }}
   cancel-in-progress: true
