@@ -102,6 +102,7 @@ jobs:
       DATABRICKS_CLIENT_ID: ${{ vars.DATABRICKS_CLIENT_ID }}
       BUNDLE_VAR_catalog: ${{ vars.DATABRICKS_CATALOG }}
       BUNDLE_VAR_schema: ${{ vars.DATABRICKS_SCHEMA }}
+      BUNDLE_VAR_airflow_sp_application_id: ${{ vars.DATABRICKS_AIRFLOW_SP_APPLICATION_ID }}
     steps:
       - uses: actions/checkout@v4
 

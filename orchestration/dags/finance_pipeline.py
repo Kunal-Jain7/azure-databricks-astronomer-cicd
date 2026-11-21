@@ -2,7 +2,7 @@
 import os
 from datetime import datetime
 
-from airflow import DAG
+from airflow.sdk import DAG
 from airflow.providers.databricks.operators.databricks import DatabricksRunNowOperator
 
 ENV = os.environ.get("ENV_NAME", "dev")

@@ -1,2 +1,2 @@
-# Astro Runtime 12.6.0 is Airflow 2.10.x. Keep AIRFLOW_VERSION in .github/workflows/ci.yml in step.
-FROM quay.io/astronomer/astro-runtime:12.6.0
+# Astro Runtime 3.4-1 is Airflow 3.4.0. Keep AIRFLOW_VERSION in .github/workflows/ci.yml in step.
+FROM quay.io/astronomer/astro-runtime:3.4-1

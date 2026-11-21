@@ -104,6 +104,18 @@ jobs:
     permissions:
       contents: read
     steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      # Diagnostic: the Astro CLI treats a folder as a project only if .astro/config.yaml exists in it.
+      # This fails early with a clear message and shows what was checked out. Remove once deploys work.
+      - name: Check the Astro project folder
+        run: |
+          set -euo pipefail
+          ls -la orchestration orchestration/.astro || true
+          test -f orchestration/.astro/config.yaml || { echo "Missing orchestration/.astro/config.yaml on this commit ($GITHUB_SHA)"; exit 1; }
+
       # The action checks the repository out itself.
       # deploy-type comes from the plan job (complete push range). The action's own "infer" mode looks at
       # the latest commit only, so several commits landing at once could skip DAG changes.
@@ -115,6 +127,7 @@ jobs:
           root-folder: orchestration
           deploy-type: ${{ needs.plan.outputs.deploy_type }}
           description: ${{ github.sha }}
+          wake-on-deploy: true   # dev deployments may be hibernating; wake them for the deploy
           wait-time: 15m
         env:
           ASTRO_API_TOKEN: ${{ secrets.ASTRO_API_TOKEN }}
